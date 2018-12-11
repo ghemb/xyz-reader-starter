@@ -17,8 +17,11 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ShareCompat;
 import android.support.v7.graphics.Palette;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.Html;
 import android.text.format.DateUtils;
 import android.text.method.LinkMovementMethod;
@@ -55,8 +58,8 @@ public class ArticleDetailFragment extends Fragment implements
     private ColorDrawable mStatusBarColorDrawable;
 
     private int mTopInset;
-    private View mPhotoContainerView;
-    private ImageView mPhotoView;
+    //    private View mPhotoContainerView;
+//    private ImageView mPhotoView;
     private int mScrollY;
     private boolean mIsCard = false;
     private int mStatusBarFullOpacityBottom;
@@ -65,7 +68,8 @@ public class ArticleDetailFragment extends Fragment implements
     // Use default locale format
     private SimpleDateFormat outputFormat = new SimpleDateFormat();
     // Most time functions can only handle 1902 - 2037
-    private GregorianCalendar START_OF_EPOCH = new GregorianCalendar(2,1,1);
+    private GregorianCalendar START_OF_EPOCH = new GregorianCalendar(2, 1, 1);
+    private ArticleAdapter mAdatper;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
@@ -113,7 +117,7 @@ public class ArticleDetailFragment extends Fragment implements
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
         mRootView = inflater.inflate(R.layout.fragment_article_detail, container, false);
         mDrawInsetsFrameLayout = (DrawInsetsFrameLayout)
                 mRootView.findViewById(R.id.draw_insets_frame_layout);
@@ -125,18 +129,10 @@ public class ArticleDetailFragment extends Fragment implements
         });
 
         mScrollView = (ObservableScrollView) mRootView.findViewById(R.id.scrollview);
-        mScrollView.setCallbacks(new ObservableScrollView.Callbacks() {
-            @Override
-            public void onScrollChanged() {
-                mScrollY = mScrollView.getScrollY();
-                getActivityCast().onUpButtonFloorChanged(mItemId, ArticleDetailFragment.this);
-                mPhotoContainerView.setTranslationY((int) (mScrollY - mScrollY / PARALLAX_FACTOR));
-                updateStatusBar();
-            }
-        });
 
-        mPhotoView = (ImageView) mRootView.findViewById(R.id.photo);
-        mPhotoContainerView = mRootView.findViewById(R.id.photo_container);
+
+//        mPhotoView = (ImageView) mRootView.findViewById(R.id.photo);
+//        mPhotoContainerView = mRootView.findViewById(R.id.photo_container);
 
         mStatusBarColorDrawable = new ColorDrawable(0);
 
@@ -150,14 +146,18 @@ public class ArticleDetailFragment extends Fragment implements
             }
         });
 
-        bindViews();
+        RecyclerView recyclerView = mRootView.findViewById(R.id.rv_rv_article_paragraph);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        mAdatper = new ArticleAdapter(mCursor);
+        recyclerView.setAdapter(mAdatper);
+
         updateStatusBar();
         return mRootView;
     }
 
     private void updateStatusBar() {
         int color = 0;
-        if (mPhotoView != null && mTopInset != 0 && mScrollY > 0) {
+        if (mTopInset != 0 && mScrollY > 0) {
             float f = progress(mScrollY,
                     mStatusBarFullOpacityBottom - mTopInset * 3,
                     mStatusBarFullOpacityBottom - mTopInset);
@@ -195,71 +195,6 @@ public class ArticleDetailFragment extends Fragment implements
         }
     }
 
-    private void bindViews() {
-        if (mRootView == null) {
-            return;
-        }
-
-        TextView titleView = (TextView) mRootView.findViewById(R.id.article_title);
-        TextView bylineView = (TextView) mRootView.findViewById(R.id.article_byline);
-        bylineView.setMovementMethod(new LinkMovementMethod());
-        TextView bodyView = (TextView) mRootView.findViewById(R.id.article_body);
-
-
-        bodyView.setTypeface(Typeface.createFromAsset(getResources().getAssets(), "Rosario-Regular.ttf"));
-
-        if (mCursor != null) {
-            mRootView.setAlpha(0);
-            mRootView.setVisibility(View.VISIBLE);
-            mRootView.animate().alpha(1);
-            titleView.setText(mCursor.getString(ArticleLoader.Query.TITLE));
-            Date publishedDate = parsePublishedDate();
-            if (!publishedDate.before(START_OF_EPOCH.getTime())) {
-                bylineView.setText(Html.fromHtml(
-                        DateUtils.getRelativeTimeSpanString(
-                                publishedDate.getTime(),
-                                System.currentTimeMillis(), DateUtils.HOUR_IN_MILLIS,
-                                DateUtils.FORMAT_ABBREV_ALL).toString()
-                                + " by <font color='#ffffff'>"
-                                + mCursor.getString(ArticleLoader.Query.AUTHOR)
-                                + "</font>"));
-
-            } else {
-                // If date is before 1902, just show the string
-                bylineView.setText(Html.fromHtml(
-                        outputFormat.format(publishedDate) + " by <font color='#ffffff'>"
-                        + mCursor.getString(ArticleLoader.Query.AUTHOR)
-                                + "</font>"));
-
-            }
-            bodyView.setText(Html.fromHtml(mCursor.getString(ArticleLoader.Query.BODY).replaceAll("(\r\n|\n)", "<br />")));
-            ImageLoaderHelper.getInstance(getActivity()).getImageLoader()
-                    .get(mCursor.getString(ArticleLoader.Query.PHOTO_URL), new ImageLoader.ImageListener() {
-                        @Override
-                        public void onResponse(ImageLoader.ImageContainer imageContainer, boolean b) {
-                            Bitmap bitmap = imageContainer.getBitmap();
-                            if (bitmap != null) {
-                                Palette p = Palette.generate(bitmap, 12);
-                                mMutedColor = p.getDarkMutedColor(0xFF333333);
-                                mPhotoView.setImageBitmap(imageContainer.getBitmap());
-                                mRootView.findViewById(R.id.meta_bar)
-                                        .setBackgroundColor(mMutedColor);
-                                updateStatusBar();
-                            }
-                        }
-
-                        @Override
-                        public void onErrorResponse(VolleyError volleyError) {
-
-                        }
-                    });
-        } else {
-            mRootView.setVisibility(View.GONE);
-            titleView.setText("N/A");
-            bylineView.setText("N/A" );
-            bodyView.setText("N/A");
-        }
-    }
 
     @Override
     public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
@@ -281,17 +216,16 @@ public class ArticleDetailFragment extends Fragment implements
             mCursor.close();
             mCursor = null;
         }
+        mAdatper.swapCursor(mCursor);
 
-        bindViews();
     }
 
     @Override
     public void onLoaderReset(Loader<Cursor> cursorLoader) {
         mCursor = null;
-        bindViews();
     }
 
-    public int getUpButtonFloor() {
+    /*public int getUpButtonFloor() {
         if (mPhotoContainerView == null || mPhotoView.getHeight() == 0) {
             return Integer.MAX_VALUE;
         }
@@ -300,5 +234,127 @@ public class ArticleDetailFragment extends Fragment implements
         return mIsCard
                 ? (int) mPhotoContainerView.getTranslationY() + mPhotoView.getHeight() - mScrollY
                 : mPhotoView.getHeight() - mScrollY;
+    }*/
+
+    private class ArticleAdapter extends RecyclerView.Adapter<ArticleAdapter.ArticleViewHolder> {
+        private Cursor mCursor;
+
+        public ArticleAdapter(Cursor cursor) {
+            mCursor = cursor;
+        }
+
+        @NonNull
+        @Override
+        public ArticleViewHolder onCreateViewHolder(@NonNull ViewGroup viewGroup, int i) {
+            ArticleViewHolder vh;
+            View view = LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.article_body_item, viewGroup, false);
+            vh = new ArticleViewHolder(view);
+            return vh;
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ArticleViewHolder vh, int i) {
+            bindViews(vh);
+        }
+
+        @Override
+        public int getItemCount() {
+            if (mCursor == null) {
+                return 0;
+            } else {
+                return mCursor.getCount();
+            }
+        }
+
+        public class ArticleViewHolder extends RecyclerView.ViewHolder {
+            TextView textView;
+            TextView titleView;
+            TextView bylineView;
+            ImageView photoView;
+            View meta_bar;
+            View photoContainer;
+
+            public ArticleViewHolder(@NonNull View itemView) {
+                super(itemView);
+                textView = itemView.findViewById(R.id.article_body);
+                titleView = itemView.findViewById(R.id.article_title);
+                bylineView = itemView.findViewById(R.id.article_byline);
+                photoView = itemView.findViewById(R.id.photo);
+                photoContainer = itemView.findViewById(R.id.photo_container);
+                meta_bar = itemView.findViewById(R.id.meta_bar);
+            }
+        }
+
+        public void swapCursor(Cursor cursor) {
+            if (mCursor != null) {
+                mCursor.close();
+            }
+            mCursor = cursor;
+            if (mCursor != null) {
+                this.notifyDataSetChanged();
+            }
+        }
+
+        private void bindViews(final ArticleViewHolder vh) {
+            mScrollView.setCallbacks(new ObservableScrollView.Callbacks() {
+                @Override
+                public void onScrollChanged() {
+                    mScrollY = mScrollView.getScrollY();
+                    getActivityCast().onUpButtonFloorChanged(mItemId, ArticleDetailFragment.this);
+                    vh.photoContainer.setTranslationY((int) (mScrollY - mScrollY / PARALLAX_FACTOR));
+                    updateStatusBar();
+                }
+            });
+
+//        bodyView.setTypeface(Typeface.createFromAsset(getResources().getAssets(), "Rosario-Regular.ttf"));
+
+            mRootView.setAlpha(0);
+            mRootView.setVisibility(View.VISIBLE);
+            mRootView.animate().alpha(1);
+
+            vh.titleView.setText(mCursor.getString(ArticleLoader.Query.TITLE));
+            Date publishedDate = parsePublishedDate();
+            if (!publishedDate.before(START_OF_EPOCH.getTime())) {
+                vh.bylineView.setText(Html.fromHtml(
+                        DateUtils.getRelativeTimeSpanString(
+                                publishedDate.getTime(),
+                                System.currentTimeMillis(), DateUtils.HOUR_IN_MILLIS,
+                                DateUtils.FORMAT_ABBREV_ALL).toString()
+                                + " by <font color='#ffffff'>"
+                                + mCursor.getString(ArticleLoader.Query.AUTHOR)
+                                + "</font>"));
+
+            } else {
+                // If date is before 1902, just show the string
+                vh.bylineView.setText(Html.fromHtml(
+                        outputFormat.format(publishedDate) + " by <font color='#ffffff'>"
+                                + mCursor.getString(ArticleLoader.Query.AUTHOR)
+                                + "</font>"));
+
+            }
+//            bodyView.setText(Html.fromHtml(mCursor.getString(ArticleLoader.Query.BODY).replaceAll("(\r\n|\n)", "<br />")));
+            ImageLoaderHelper.getInstance(getActivity()).getImageLoader()
+                    .get(mCursor.getString(ArticleLoader.Query.PHOTO_URL), new ImageLoader.ImageListener() {
+                        @Override
+                        public void onResponse(ImageLoader.ImageContainer imageContainer, boolean b) {
+                            Bitmap bitmap = imageContainer.getBitmap();
+                            if (bitmap != null) {
+                                Palette p = Palette.generate(bitmap, 12);
+                                mMutedColor = p.getDarkMutedColor(0xFF333333);
+                                vh.photoView.setImageBitmap(imageContainer.getBitmap());
+                                vh.meta_bar.setBackgroundColor(mMutedColor);
+                                updateStatusBar();
+                            }
+                        }
+
+                        @Override
+                        public void onErrorResponse(VolleyError volleyError) {
+
+                        }
+                    });
+            vh.textView.setText(
+                    Html.fromHtml(mCursor.getString(ArticleLoader.Query.BODY)
+                            .replaceAll("(\r\n|\n)", "<br />")));
+        }
     }
 }
